@@ -8,29 +8,29 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: white;
-            font-family: sans-serif;
+            background-color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow-x: hidden;
         }
 
-        /* BACKGROUND BOARD (The "Small" Images) */
+        /* THE BOARD: Where images land after being clicked */
         #comic-strip {
             display: flex;
             flex-wrap: wrap;
             justify-content: flex-start;
-            padding: 20px;
-            gap: 15px;
-            padding-bottom: 100px;
+            padding: 30px;
+            gap: 20px;
+            padding-bottom: 200px; /* Extra space to allow scrolling */
         }
 
-        /* ADJUSTED: Each panel now forces the image to fit its size */
+        /* BACK PANELS: Adjusted to be uniform and clean */
         .comic-panel {
-            width: 300px; 
-            height: 220px;
-            background: #eee;
-            border: 3px solid black;
-            box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
-            overflow: hidden; /* Prevents oversized images from leaking out */
+            width: 320px; 
+            height: 240px;
+            background: #f9f9f9;
+            border: 4px solid #000;
+            box-shadow: 6px 6px 0px rgba(0,0,0,0.1);
+            overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -39,21 +39,18 @@
         .comic-panel img {
             width: 100%;
             height: 100%;
-            /* FIXED SIZE: This makes every image fill the box exactly 
-               without stretching (it crops the edges if necessary) */
-            object-fit: cover; 
+            object-fit: cover; /* Fills the box entirely */
             display: block;
         }
 
-        /* THE FOCUS OVERLAY (The "Big" Image) */
+        /* THE FOCUS OVERLAY: The big image stage */
         #focus-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            /* Completely clear background so you see the board behind */
-            background-color: rgba(255, 255, 255, 0); 
+            background-color: transparent; /* No fade, pure visibility */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -61,15 +58,14 @@
             cursor: pointer;
         }
 
-        /* The Big Image styling */
+        /* BIG IMAGE: Fixed to adjust to any screen without bugging */
         #main-image {
             max-width: 85vw;
             max-height: 85vh;
-            border: 6px solid #000;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            border: 8px solid #000;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.3);
             background-color: white;
-            /* Makes sure the big image maintains ratio while filling the view */
-            object-fit: contain; 
+            object-fit: contain; /* Shows the whole image regardless of ratio */
         }
 
         #main-image.hidden {
@@ -79,10 +75,11 @@
         #end-message {
             display: none;
             background: white;
-            padding: 20px;
-            border: 4px solid black;
-            font-size: 2rem;
+            padding: 30px 50px;
+            border: 5px solid black;
+            font-size: 2.5rem;
             font-weight: bold;
+            box-shadow: 10px 10px 0px #000;
         }
     </style>
 </head>
@@ -91,14 +88,15 @@
     <div id="comic-strip"></div>
 
     <div id="focus-overlay" onclick="nextImage()">
-        <img id="main-image" src="" alt="Active View">
+        <img id="main-image" src="" alt="Click to Move to Board">
         <div id="end-message">COMIC COMPLETE</div>
     </div>
 
 <script>
-    // YOUR IMAGES: I have pre-filled your 5 links. 
-    // Just add more links inside the brackets separated by commas.
+    // These are your 5 direct links. 
+    // Simply add your next 35 links inside these quotes, separated by commas.
     const imageUrls = [
+        "https://i.ibb.co/PzxDt8Hk/6afc1753-639b-45ed-865e-ac1f05743513.png",
         "https://i.ibb.co/PzxDt8Hk/6afc1753-639b-45ed-865e-ac1f05743513.png",
         "https://i.ibb.co/jvWnbhP3/62bb51f3-ce62-408e-8c80-cecf61f230e0.png",
         "https://i.ibb.co/35sfp9sj/2c20b051-3342-4666-a1e9-f2d087842375.png",
@@ -106,37 +104,50 @@
     ];
 
     let currentIndex = 0;
-    const mainImage = document.getElementById('main-image');
-    const comicStrip = document.getElementById('comic-strip');
-    const endMessage = document.getElementById('end-message');
+    const mainImgElement = document.getElementById('main-image');
+    const board = document.getElementById('comic-strip');
+    const finishNote = document.getElementById('end-message');
 
-    // Load first image
+    // Function to set the current big image
+    function loadBigImage(index) {
+        if (index < imageUrls.length) {
+            mainImgElement.src = imageUrls[index];
+        }
+    }
+
+    // Initialize the very first image
     if (imageUrls.length > 0) {
-        mainImage.src = imageUrls[0];
+        loadBigImage(0);
     }
 
     function nextImage() {
         if (currentIndex >= imageUrls.length) return;
 
-        // 1. Send current big image to the background board
+        // 1. Move the image that WAS big to the board
         const panel = document.createElement('div');
         panel.className = 'comic-panel';
+        
         const img = document.createElement('img');
         img.src = imageUrls[currentIndex];
+        
         panel.appendChild(img);
-        comicStrip.appendChild(panel);
+        board.appendChild(panel);
 
-        // Scroll down as the board grows
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        // Auto-scroll so the user sees the board growing
+        window.scrollTo({
+            top: document.body.scrollHeight,
+            behavior: 'smooth'
+        });
 
+        // 2. Move to the next image index
         currentIndex++;
 
-        // 2. Show next image or finish
+        // 3. Update the Big Image or finish
         if (currentIndex < imageUrls.length) {
-            mainImage.src = imageUrls[currentIndex];
+            loadBigImage(currentIndex);
         } else {
-            mainImage.classList.add('hidden');
-            endMessage.style.display = 'block';
+            mainImgElement.classList.add('hidden');
+            finishNote.style.display = 'block';
             document.getElementById('focus-overlay').style.pointerEvents = 'none';
         }
     }
