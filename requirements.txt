@@ -2,3 +2,4 @@ flask
 flask-cors
 mlconjug3
 gunicorn
+setuptools
