@@ -6,34 +6,43 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Initialize the Verbecc Conjugator for Romanian
+# Initialize the Verbecc Conjugator
 # This loads the dictionary and ML models.
 conjugator = CompleteConjugator(lang='ro')
 
 def extract_conjugations(data):
     """
-    Recursive function to dig through the complex dictionary returned by verbecc
-    and extract only the final conjugated strings.
+    Smart extraction that navigates verbecc's nested dictionary structure.
+    It looks specifically for the list of conjugated strings.
     """
     results = []
     
     if isinstance(data, dict):
-        # If it's a dictionary (like 'Mood' or 'Tense'), dig deeper
-        for key, value in data.items():
+        # 1. CHECK FOR THE TREASURE: 
+        # Does this dict contain the actual conjugations?
+        # 'conjugations' is the standard key, 'c' is the minified key.
+        if 'conjugations' in data:
+            return extract_conjugations(data['conjugations'])
+        if 'c' in data:
+            return extract_conjugations(data['c'])
+            
+        # 2. DIG DEEPER:
+        # If not, it's a Mood or Tense container. Iterate through values.
+        for value in data.values():
             results.extend(extract_conjugations(value))
+            
     elif isinstance(data, list):
-        # If it's a list, these are the actual conjugations!
+        # 3. COLLECT DATA:
+        # If we found a list, check the items inside.
         for item in data:
-            # verbecc sometimes returns full objects or strings depending on version.
-            # We treat them as strings.
             if isinstance(item, str):
                 results.append(item)
+            elif isinstance(item, dict):
+                # If the list contains dictionaries (rare but possible), recurse
+                results.extend(extract_conjugations(item))
             elif isinstance(item, list):
-                 # Sometimes it returns [pronoun, verb], we join them
-                 results.append(" ".join(item))
-            elif hasattr(item, '__iter__'):
-                 # Handle older versions where it might be a tuple
-                 results.append(" ".join([str(x) for x in item]))
+                # Flatten nested lists
+                results.extend(extract_conjugations(item))
                  
     return results
 
@@ -45,33 +54,24 @@ def conjugate_verb():
     if not raw_verb:
         return jsonify({"error": "Please enter a verb."}), 400
 
-    # Clean input: verbecc expects the infinitive (e.g., 'fi' or 'a fi')
-    # It handles 'a ' well, but we can strip it to be safe.
     verb_to_try = raw_verb
 
     try:
         # 1. Get the complex conjugation object
         conjugation = conjugator.conjugate(verb_to_try)
-        
-        # 2. Get the data as a dictionary
-        # verbecc 2.x returns a wrapper, .get_data() gives the raw dict
         conjugation_data = conjugation.get_data()
         
-        # 3. Flatten the dictionary into a simple list of verbs
+        # 2. Extract only the strings
         all_forms = extract_conjugations(conjugation_data)
         
-        # 4. Filter and Clean
-        # - Remove duplicates
-        # - Remove empty strings
-        # - Filter out "random stuff" (e.g., if a result is just 1 letter and not 'e')
+        # 3. Clean and Sort
         cleaned_results = set()
         for form in all_forms:
             clean_form = str(form).strip()
-            # We keep 'e' (as in 'el e') but discard obvious garbage if any
+            # We keep 'e' (valid for "el e") but remove empty strings
             if len(clean_form) > 0:
                 cleaned_results.add(clean_form)
 
-        # 5. Sort alphabetically
         final_list = sorted(list(cleaned_results))
         
         if not final_list:
@@ -80,8 +80,8 @@ def conjugate_verb():
         return jsonify({"results": final_list})
 
     except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({"error": "Server error. The verb might be invalid."}), 500
+        print(f"Server Error: {e}")
+        return jsonify({"error": "Server error processing verb."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
