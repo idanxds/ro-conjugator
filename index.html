@@ -55,7 +55,7 @@
         outputDiv.innerText = 'Loading...';
 
         try {
-            const response = await fetch('https://ro-conjugator.onrender.com', {
+            const response = await fetch('https://ro-conjugator.onrender.com/conjugate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ verb: verb })
@@ -89,4 +89,5 @@
 
 </body>
 </html>
+
 
