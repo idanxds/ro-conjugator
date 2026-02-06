@@ -4,33 +4,41 @@ import mlconjug3
 import os
 
 app = Flask(__name__)
-CORS(app)  # Allows your HTML file to talk to this Python server
+CORS(app)
 
-# Initialize the conjugator once (it's faster)
+# Initialize the conjugator
 conjugator = mlconjug3.Conjugator(language='ro')
 
 @app.route('/conjugate', methods=['POST'])
 def conjugate_verb():
     data = request.get_json()
-    verb_input = data.get('verb', '').strip()
+    raw_verb = data.get('verb', '').strip().lower()
 
-    if not verb_input:
+    if not raw_verb:
         return jsonify({"error": "Please enter a verb."}), 400
 
+    # STRATEGY 1: Clean the input
+    # Remove 'a ' from the start if present (e.g. "a face" -> "face")
+    if raw_verb.startswith("a "):
+        verb_to_try = raw_verb[2:].strip()
+    else:
+        verb_to_try = raw_verb
+
     try:
-        # Conjugate the verb
-        conjugation_object = conjugator.conjugate(verb_input)
+        # STRATEGY 2: Try conjugating
+        conjugation_object = conjugator.conjugate(verb_to_try)
         
-        # Flatten the results into a clean list of strings
-        # Format: "Indicativ Prezent (1s): vorbesc"
         results = []
         for mood, tense, person, form in conjugation_object.iterate():
+            # Clean up the output to look nice
             results.append(f"{mood} {tense} ({person}): {form}")
             
         return jsonify({"results": results})
 
     except ValueError:
-        return jsonify({"error": f"Verb '{verb_input}' not found."}), 404
+        # If standard conjugation fails, it might be an unknown verb.
+        # mlconjug3 is actually good at guessing new verbs, but sometimes the "lookup" fails.
+        return jsonify({"error": f"Verb '{verb_to_try}' not found in the model. Try checking accents (ă, â, î, ș, ț)."}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
