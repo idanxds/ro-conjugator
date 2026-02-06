@@ -9,3 +9,5 @@ scikit-learn<1.4
 numpy<2.0
 colorama
 defusedxml
+requests
+beautifulsoup4
