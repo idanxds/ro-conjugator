@@ -11,4 +11,5 @@ colorama
 defusedxml
 requests
 beautifulsoup4
-.
+
+
