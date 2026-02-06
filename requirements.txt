@@ -1,11 +1,7 @@
 flask
 flask-cors
 gunicorn
-verbecc
-scikit-learn
+git+https://github.com/bretttolbert/verbecc.git
 numpy
-scipy
 lxml
 PyYAML
-jsbeautifier
-importlib-resources
