@@ -1,39 +1,41 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import mlconjug3
-import requests
-from bs4 import BeautifulSoup
+from verbecc import CompleteConjugator
 import os
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialize the AI conjugator
-conjugator = mlconjug3.Conjugator(language='ro')
+# Initialize the Verbecc Conjugator for Romanian
+# This loads the dictionary and ML models.
+conjugator = CompleteConjugator(lang='ro')
 
-def scrape_wiktionary_clean(verb):
-    """Scrapes ONLY the conjugated words, ignoring labels."""
-    try:
-        url = f"https://en.wiktionary.org/api/rest_v1/page/html/{verb}?redirect=true"
-        response = requests.get(url)
-        if response.status_code != 200:
-            return None
-
-        soup = BeautifulSoup(response.content, 'html.parser')
-        tables = soup.find_all('table', class_='inflection-table')
-        
-        clean_words = []
-        for table in tables:
-            data_cells = table.find_all('td')
-            for cell in data_cells:
-                word = cell.get_text(" ", strip=True)
-                # Filter out garbage/labels
-                if word and not any(x in word.lower() for x in ["subjunctive", "imperative", "person", "singular", "plural"]):
-                    clean_words.append(word)
-                    
-        return clean_words if len(clean_words) > 0 else None
-    except:
-        return None
+def extract_conjugations(data):
+    """
+    Recursive function to dig through the complex dictionary returned by verbecc
+    and extract only the final conjugated strings.
+    """
+    results = []
+    
+    if isinstance(data, dict):
+        # If it's a dictionary (like 'Mood' or 'Tense'), dig deeper
+        for key, value in data.items():
+            results.extend(extract_conjugations(value))
+    elif isinstance(data, list):
+        # If it's a list, these are the actual conjugations!
+        for item in data:
+            # verbecc sometimes returns full objects or strings depending on version.
+            # We treat them as strings.
+            if isinstance(item, str):
+                results.append(item)
+            elif isinstance(item, list):
+                 # Sometimes it returns [pronoun, verb], we join them
+                 results.append(" ".join(item))
+            elif hasattr(item, '__iter__'):
+                 # Handle older versions where it might be a tuple
+                 results.append(" ".join([str(x) for x in item]))
+                 
+    return results
 
 @app.route('/conjugate', methods=['POST'])
 def conjugate_verb():
@@ -43,36 +45,43 @@ def conjugate_verb():
     if not raw_verb:
         return jsonify({"error": "Please enter a verb."}), 400
 
-    # Clean input
-    verb_to_try = raw_verb[2:].strip() if raw_verb.startswith("a ") else raw_verb
+    # Clean input: verbecc expects the infinitive (e.g., 'fi' or 'a fi')
+    # It handles 'a ' well, but we can strip it to be safe.
+    verb_to_try = raw_verb
 
-    results = []
-
-    # --- ATTEMPT 1: MLCONJUG3 (AI) ---
     try:
-        conjugation_object = conjugator.conjugate(verb_to_try)
-        if conjugation_object:
-            # We ONLY want 'form' (the 4th item)
-            for _, _, _, form in conjugation_object.iterate():
-                results.append(form)
-    except:
-        pass
+        # 1. Get the complex conjugation object
+        conjugation = conjugator.conjugate(verb_to_try)
+        
+        # 2. Get the data as a dictionary
+        # verbecc 2.x returns a wrapper, .get_data() gives the raw dict
+        conjugation_data = conjugation.get_data()
+        
+        # 3. Flatten the dictionary into a simple list of verbs
+        all_forms = extract_conjugations(conjugation_data)
+        
+        # 4. Filter and Clean
+        # - Remove duplicates
+        # - Remove empty strings
+        # - Filter out "random stuff" (e.g., if a result is just 1 letter and not 'e')
+        cleaned_results = set()
+        for form in all_forms:
+            clean_form = str(form).strip()
+            # We keep 'e' (as in 'el e') but discard obvious garbage if any
+            if len(clean_form) > 0:
+                cleaned_results.add(clean_form)
 
-    # --- ATTEMPT 2: WIKTIONARY (Backup) ---
-    if not results:
-        print(f"AI failed for '{verb_to_try}', trying Wiktionary...")
-        wiki_results = scrape_wiktionary_clean(verb_to_try)
-        if wiki_results:
-            results = wiki_results
-        else:
-            return jsonify({"error": f"Verb '{verb_to_try}' not found."}), 404
+        # 5. Sort alphabetically
+        final_list = sorted(list(cleaned_results))
+        
+        if not final_list:
+            return jsonify({"error": f"Could not conjugate '{verb_to_try}'."}), 404
 
-    # --- FINAL CLEANUP: Remove Duplicates & Sort ---
-    # set() removes duplicates
-    # sorted() puts them in alphabetical order
-    final_results = sorted(list(set(results)))
+        return jsonify({"results": final_list})
 
-    return jsonify({"results": final_results})
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({"error": "Server error. The verb might be invalid."}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
