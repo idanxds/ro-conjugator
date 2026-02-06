@@ -17,30 +17,29 @@ def conjugate_verb():
     if not raw_verb:
         return jsonify({"error": "Please enter a verb."}), 400
 
-    # STRATEGY 1: Clean the input
-    # Remove 'a ' from the start if present (e.g. "a face" -> "face")
-    if raw_verb.startswith("a "):
-        verb_to_try = raw_verb[2:].strip()
-    else:
-        verb_to_try = raw_verb
+    # Clean input: Remove 'a ' prefix if present
+    verb_to_try = raw_verb[2:].strip() if raw_verb.startswith("a ") else raw_verb
 
     try:
-        # STRATEGY 2: Try conjugating
+        # Attempt conjugation
         conjugation_object = conjugator.conjugate(verb_to_try)
         
+        # --- THE FIX IS HERE ---
+        # Sometimes the library returns 'None' instead of raising an error.
+        # We must check for this before trying to loop through it.
+        if conjugation_object is None:
+            return jsonify({"error": f"Verb '{verb_to_try}' could not be conjugated by the AI model."}), 404
+
+        # Format results
         results = []
         for mood, tense, person, form in conjugation_object.iterate():
-            # Clean up the output to look nice
             results.append(f"{mood} {tense} ({person}): {form}")
             
         return jsonify({"results": results})
 
-    except ValueError:
-        # If standard conjugation fails, it might be an unknown verb.
-        # mlconjug3 is actually good at guessing new verbs, but sometimes the "lookup" fails.
-        return jsonify({"error": f"Verb '{verb_to_try}' not found in the model. Try checking accents (ă, â, î, ș, ț)."}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # Catch any other unexpected crashes
+        return jsonify({"error": f"Server Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
