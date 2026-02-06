@@ -4,3 +4,8 @@ mlconjug3
 gunicorn
 setuptools
 PyYAML
+joblib
+scikit-learn
+numpy
+colorama
+defusedxml
